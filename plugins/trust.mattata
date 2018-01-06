@@ -13,18 +13,9 @@ function trust:init()
 end
 
 function trust:on_message(message, configuration, language)
-    if message.chat.type ~= 'supergroup'
-    then
-        return mattata.send_reply(
-            message,
-            language['errors']['supergroup']
-        )
-    elseif not mattata.is_group_admin(
-        message.chat.id,
-        message.from.id,
-        true
-    )
-    then
+    if message.chat.type ~= 'supergroup' then
+        return mattata.send_reply(message, language['errors']['supergroup'])
+    elseif not mattata.is_group_admin(self, message.chat.id, message.from.id, true) then
         return mattata.send_reply(
             message,
             language['errors']['admin']
@@ -68,7 +59,7 @@ function trust:on_message(message, configuration, language)
             message,
             language['errors']['generic']
         )
-    elseif mattata.is_group_admin(
+    elseif mattata.is_group_admin(self,
         message.chat.id,
         user.id
     )
@@ -79,9 +70,8 @@ function trust:on_message(message, configuration, language)
             message,
             language['trust']['1']
         )
-    elseif status.result.status == 'left'
-    or status.result.status == 'kicked'
-    then -- Check if the user is in the group or not.
+    elseif status.result.status == 'left' or status.result.status == 'kicked' then
+    -- Check if the user is in the group or not.
         return mattata.send_reply(
             message,
             status.result.status == 'left'
@@ -89,18 +79,8 @@ function trust:on_message(message, configuration, language)
             or language['trust']['3']
         )
     end
-    redis:sadd(
-        'administration:' .. message.chat.id .. ':trusted',
-        user.id
-    )
-    if redis:hget(
-        string.format(
-            'chat:%s:settings',
-            message.chat.id
-        ),
-        'log administrative actions'
-    )
-    then
+    redis:sadd('administration:' .. message.chat.id .. ':trusted', user.id)
+    if mattata.get_setting(self, message.chat.id, 'log administrative actions') then
         mattata.send_message(
             mattata.get_log_chat(message.chat.id),
             string.format(

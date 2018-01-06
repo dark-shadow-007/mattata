@@ -19,7 +19,7 @@ function logchat:on_message(message, configuration, language)
             message,
             language['errors']['supergroup']
         )
-    elseif not mattata.is_group_admin(
+    elseif not mattata.is_group_admin(self,
         message.chat.id,
         message.from.id
     )
@@ -78,7 +78,7 @@ function logchat:on_message(message, configuration, language)
             res.result.message_id,
             language['logchat']['4']
         )
-    elseif not mattata.is_group_admin(
+    elseif not mattata.is_group_admin(self,
         valid.result.id,
         message.from.id
     )

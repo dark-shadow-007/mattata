@@ -73,7 +73,7 @@ function kick:on_message(message, configuration, language)
         return mattata.send_reply(message, language['kick']['5'])
     end
     redis:hincrby('chat:' .. message.chat.id .. ':' .. user_object.id, 'kicks', 1)
-    if mattata.get_setting(message.chat.id, 'log administrative actions') then
+    if mattata.get_setting(self, message.chat.id, 'log administrative actions') then
         mattata.send_message(
             mattata.get_log_chat(message.chat.id),
             string.format(
@@ -92,7 +92,7 @@ function kick:on_message(message, configuration, language)
             'html'
         )
     end
-    if message.reply and mattata.get_setting(message.chat.id, 'delete reply on action') then
+    if message.reply and mattata.get_setting(self, message.chat.id, 'delete reply on action') then
         mattata.delete_message(message.chat.id, message.reply.message_id)
     end
     return mattata.send_message(

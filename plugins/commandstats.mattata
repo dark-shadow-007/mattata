@@ -103,7 +103,7 @@ function commandstats:on_message(message, configuration, language)
     if input
     and input:lower() == 'reset'
     and (
-        mattata.is_group_admin(
+        mattata.is_group_admin(self,
             message.chat.id,
             message.from.id,
             true

@@ -42,116 +42,63 @@ function setlang.get_keyboard(user_id)
         }
     }
     local total = 0
-    for _, v in pairs(setlang.languages_short)
-    do
+    for _, v in pairs(setlang.languages_short) do
         total = total + 1
     end
     local count = 0
     local rows = math.floor(total / 2)
-    if rows ~= total
-    then
+    if rows ~= total then
         rows = rows + 1
     end
     local row = 1
-    for k, v in pairs(setlang.languages_short)
-    do
+    for k, v in pairs(setlang.languages_short) do
         count = count + 1
-        if count == rows * row
-        then
+        if count == rows * row then
             row = row + 1
-            table.insert(
-                keyboard.inline_keyboard,
-                {}
-            )
+            table.insert(keyboard.inline_keyboard, {})
         end
-        table.insert(
-            keyboard.inline_keyboard[row],
-            {
-                ['text'] = v,
-                ['callback_data'] = 'setlang:' .. user_id .. ':' .. k
-            }
-        )
+        table.insert(keyboard.inline_keyboard[row], {
+            ['text'] = v,
+            ['callback_data'] = 'setlang:' .. user_id .. ':' .. k
+        })
     end
     return keyboard
 end
 
-function setlang.set_lang(user_id, locale, lang, language)
-    redis:hset(
-        'chat:' .. user_id .. ':settings',
-        'language',
-        locale
-    )
-    return string.format(
-        language['setlang']['1'],
-        lang
-    )
+function setlang:set_lang(user_id, locale, lang, language)
+    mattata.update_setting(self, user_id, 'language', locale)
+    return string.format(language['setlang']['1'], lang)
 end
 
-function setlang.get_lang(user_id, language)
-    local lang = redis:hget(
-        'chat:' .. user_id .. ':settings',
-        'language'
-    )
-    or 'en_gb'
-    for k, v in pairs(setlang.languages)
-    do
-        if k == lang
-        then
+function setlang:get_lang(user_id, language)
+    local lang = mattata.get_setting(self, user_id, 'language') or 'en_gb'
+    for k, v in pairs(setlang.languages) do
+        if k == lang then
             lang = v
             break
         end
     end
-    return string.format(
-        language['setlang']['2'],
-        lang
-    )
+    return string.format(language['setlang']['2'], lang)
 end
 
 function setlang:on_callback_query(callback_query, message, configuration, language)
-    if not message
-    or (
-        message
-        and message.date <= 1493668000
-    )
-    then
+    if not message or (message and message.date <= 1493668000) then
         return -- We don't want to process requests from messages before the language
         -- functionality was re-implemented, it could cause issues!
     end
     local user_id, new_language = callback_query.data:match('^(.-)%:(.-)$')
-    if not user_id
-    or not new_language
-    or tostring(callback_query.from.id) ~= user_id
-    then
+    if not user_id or not new_language or tostring(callback_query.from.id) ~= user_id then
         return
     end
-    return mattata.edit_message_text(
-        message.chat.id,
-        message.message_id,
-        setlang.set_lang(
-            user_id,
-            new_language,
-            setlang.languages[new_language],
-            language
-        ),
-        nil,
-        true,
-        setlang.get_keyboard(user_id)
-    )
+    local output = setlang.set_lang(self, user_id, new_language, setlang.languages[new_language], language)
+    local keyboard = setlang.get_keyboard(user_id)
+    return mattata.edit_message_text(message.chat.id, message.message_id, output, nil, true, keyboard)
 end
 
 function setlang:on_message(message, configuration, language)
-    return mattata.send_message(
-        message.chat.id,
-        setlang.get_lang(
-            message.from.id,
-            language
-        ),
-        nil,
-        true,
-        false,
-        nil,
-        setlang.get_keyboard(message.from.id)
-    )
+    local output = setlang.get_lang(self, message.from.id, language)
+    local keyboard = setlang.get_keyboard(message.from.id)
+    return mattata.send_message(message.chat.id, output, nil, true, false, nil, keyboard)
 end
 
 return setlang

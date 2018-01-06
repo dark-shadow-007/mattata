@@ -13,50 +13,32 @@ function ban:init()
 end
 
 function ban:on_message(message, configuration, language)
-    if message.chat.type ~= 'supergroup'
-    then
-        return mattata.send_reply(
-            message,
-            language['errors']['supergroup']
-        )
-    elseif not mattata.is_group_admin(
-        message.chat.id,
-        message.from.id
-    )
-    then
-        return mattata.send_reply(
-            message,
-            language['errors']['admin']
-        )
+    if message.chat.type ~= 'supergroup' then
+        return mattata.send_reply(message, language['errors']['supergroup'])
+    elseif not mattata.is_group_admin(message.chat.id, message.from.id) then
+        return mattata.send_reply(message, language['errors']['admin'])
     end
     local reason = false
     local user = false
     local input = mattata.input(message)
     -- Check the message object for any users this command
     -- is intended to be executed on.
-    if message.reply
-    then
+    if message.reply then
         user = message.reply.from.id
-        if input
-        then
+        if input then
             reason = input
         end
-    elseif input
-    and input:match(' ')
-    then
+    elseif input and input:match(' ') then
         user, reason = input:match('^(.-) (.-)$')
-    elseif input
-    then
+    elseif input then
         user = input
     end
-    if not user
-    then
+    if not user then
         local success = mattata.send_force_reply(
             message,
             language['ban']['1']
         )
-        if success
-        then
+        if success then
             redis:set(
                 string.format(
                     'action:%s:%s',
@@ -68,86 +50,36 @@ function ban:on_message(message, configuration, language)
         end
         return
     end
-    if reason
-    and type(reason) == 'string'
-    and reason:match('^[Ff][Oo][Rr] ')
-    then
+    if reason and type(reason) == 'string' and reason:match('^[Ff][Oo][Rr] ') then
         reason = reason:match('^[Ff][Oo][Rr] (.-)$')
     end
-    if tonumber(user) == nil
-    and not user:match('^%@')
-    then
+    if tonumber(user) == nil and not user:match('^%@') then
         user = '@' .. user
     end
-    local user_object = mattata.get_user(user)
-    or mattata.get_chat(user) -- Resolve the username/ID to a user object.
-    if not user_object
-    then
-        return mattata.send_reply(
-            message,
-            language['errors']['unknown']
-        )
-    elseif user_object.result.id == self.info.id
-    then
+    local user_object = mattata.get_user(user) or mattata.get_chat(user) -- Resolve the username/ID to a user object.
+    if not user_object then
+        return mattata.send_reply(message, language['errors']['unknown'])
+    elseif user_object.result.id == self.info.id then
         return
     end
     user_object = user_object.result
-    local status = mattata.get_chat_member(
-        message.chat.id,
-        user_object.id
-    )
-    if not status
-    then
-        return mattata.send_reply(
-            message,
-            language['errors']['generic']
-        )
-    elseif mattata.is_group_admin(
-        message.chat.id,
-        user_object.id
-    )
-    or status.result.status == 'creator'
-    or status.result.status == 'administrator'
-    then -- We won't try and ban moderators and administrators.
-        return mattata.send_reply(
-            message,
-            language['ban']['2']
-        )
-    elseif status.result.status == 'kicked'
-    then -- Check if the user has already been kicked.
-        return mattata.send_reply(
-            message,
-            language['ban']['4']
-        )
+    local status = mattata.get_chat_member(message.chat.id, user_object.id)
+    if not status then
+        return mattata.send_reply(message, language['errors']['generic'])
+    elseif mattata.is_group_admin(message.chat.id, user_object.id) or status.result.status == 'creator' or status.result.status == 'administrator' then
+        -- We won't try and ban moderators and administrators.
+        return mattata.send_reply(message, language['ban']['2'])
+    elseif status.result.status == 'kicked' then -- Check if the user has already been kicked.
+        return mattata.send_reply(message, language['ban']['4'])
     end
-    local success = mattata.ban_chat_member( -- Attempt to ban the user from the group.
-        message.chat.id,
-        user_object.id
-    )
-    if not success
-    then -- Since we've ruled everything else out, it's safe to say if it wasn't a success then the bot isn't an administrator in the group.
-        return mattata.send_reply(
-            message,
-            language['ban']['5']
-        )
+    -- Attempt to ban the user from the group.
+    local success = mattata.ban_chat_member(message.chat.id, user_object.id)
+    if not success then -- Since we've ruled everything else out, it's safe to say if it wasn't a
+    -- success then the bot isn't an administrator in the group.
+        return mattata.send_reply(message, language['ban']['5'])
     end
-    redis:hincrby(
-        string.format(
-            'chat:%s:%s',
-            message.chat.id,
-            user_object.id
-        ),
-        'bans',
-        1
-    )
-    if redis:hget(
-        string.format(
-            'chat:%s:settings',
-            message.chat.id
-        ),
-        'log administrative actions'
-    )
-    then
+    redis:hincrby('chat:' .. message.chat.id .. ':' .. user_object.id, 'bans', 1)
+    if mattata.get_setting(self, message.chat.id, 'log administrative actions') then
         mattata.send_message(
             mattata.get_log_chat(message.chat.id),
             string.format(
@@ -166,16 +98,8 @@ function ban:on_message(message, configuration, language)
             'html'
         )
     end
-    if message.reply
-    and mattata.get_setting(
-        message.chat.id,
-        'delete reply on action'
-    )
-    then
-        mattata.delete_message(
-            message.chat.id,
-            message.reply.message_id
-        )
+    if message.reply and mattata.get_setting(self, message.chat.id, 'delete reply on action') then
+        mattata.delete_message(message.chat.id, message.reply.message_id)
     end
     return mattata.send_message(
         message.chat.id,

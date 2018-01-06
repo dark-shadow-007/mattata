@@ -138,61 +138,6 @@ function utils.get_list(name)
     return redis:lrange(name, 0, tonumber(length) - 1)
 end
 
-function utils.get_inline_help(input, offset)
-    offset = offset and tonumber(offset) or 0
-    local inline_help = {}
-    local count = offset + 1
-    table.sort(mattata.plugin_list)
-    for k, v in pairs(mattata.plugin_list) do
-        -- The bot API only accepts a maximum of 50 results, hence we need the offset.
-        if k > offset and k < offset + 50 then
-            v = v:gsub('\n', ' ')
-            if v:match('^/.- %- .-$') and v:lower():match(input) then
-                table.insert(inline_help,
-                {
-                    ['type'] = 'article',
-                    ['id'] = tostring(count),
-                    ['title'] = v:match('^(/.-) %- .-$'),
-                    ['description'] = v:match('^/.- %- (.-)$'),
-                    ['input_message_content'] = {
-                        ['message_text'] = utf8.char(8226) .. ' ' .. v:match('^(/.-) %- .-$') .. ' - ' .. v:match('^/.- %- (.-)$')
-                    }
-                })
-                count = count + 1
-            end
-        end
-    end
-    return inline_help
-end
-
-function utils.get_inline_list(query, offset)
-    query = query or ''
-    offset = offset and tonumber(offset) or 0
-    local inline_help = {}
-    local count = offset + 1
-    table.sort(mattata.inline_plugin_list)
-    for k, v in pairs(mattata.inline_plugin_list) do
-        -- The bot API only accepts a maximum of 50 results, hence we need the offset.
-        if k > offset and k < offset + 50 then
-            v = v:gsub('\n', ' ')
-            if v:match('^/.- %- .-$') and v:match(query) then
-                table.insert(inline_help,
-                {
-                    ['type'] = 'article',
-                    ['id'] = tostring(count),
-                    ['title'] = v:match('^(/.-) %- .-$'),
-                    ['description'] = v:match('^/.- %- (.-)$'),
-                    ['input_message_content'] = {
-                        ['message_text'] = utf8.char(8226) .. ' ' .. v:match('^(/.-) %- .-$') .. ' - ' .. v:match('^/.- %- (.-)$')
-                    }
-                })
-                count = count + 1
-            end
-        end
-    end
-    return inline_help
-end
-
 function utils.send_reply(message, text, parse_mode, disable_web_page_preview, reply_markup, token)
     reply_markup = reply_markup or {
         ['remove_keyboard'] = true
@@ -204,10 +149,17 @@ function utils.send_reply(message, text, parse_mode, disable_web_page_preview, r
     return mattata.api.send_message(message, text, parse_mode, disable_web_page_preview, false, message.message_id, reply_markup, token)
 end
 
-function utils.toggle_user_setting(chat_id, user_id, setting)
+function utils:toggle_user_setting(chat_id, user_id, setting)
     if not chat_id or not user_id or not setting then
         return false
-    elseif not redis:hexists('user:' .. user_id .. ':' .. chat_id .. ':settings', tostring(setting)) then
+    end
+    if not self.settings[tostring(chat_id)] then
+        self.settings[tostring(chat_id)] = {}
+    end
+    if not self.settings[tostring(chat_id)][tonumber(user_id)] then
+        self.settings[tostring(chat_id)][tonumber(user_id)] = {}
+    end
+    if not self.settings[tostring(chat_id)][tonumber(user_id)][tostring(setting)] then
         local success = false
         if setting == 'restrict messages' then
             success = mattata.api.restrict_chat_member(chat_id, user_id, os.time(), false)
@@ -220,11 +172,12 @@ function utils.toggle_user_setting(chat_id, user_id, setting)
         end
         if success then
             if setting == 'restrict messages' then
-                redis:hset('user:' .. user_id .. ':' .. chat_id .. ':settings', 'restrict media messages', true)
-                redis:hset('user:' .. user_id .. ':' .. chat_id .. ':settings', 'restrict other messages', true)
-                redis:hset('user:' .. user_id .. ':' .. chat_id .. ':settings', 'restrict web page previews', true)
+                self.settings[tostring(chat_id)][tonumber(user_id)]['restrict media messages'] = true
+                self.settings[tostring(chat_id)][tonumber(user_id)]['restrict other messages'] = true
+                self.settings[tostring(chat_id)][tonumber(user_id)]['restrict web page previews'] = true
             end
-            redis:hset('user:' .. user_id .. ':' .. chat_id .. ':settings', tostring(setting), true)
+            self.settings[tostring(chat_id)][tonumber(user_id)][tostring(setting)] = true
+            return true
         end
         return success
     end
@@ -240,19 +193,27 @@ function utils.toggle_user_setting(chat_id, user_id, setting)
     end
     if success then
         if setting == 'restrict messages' then
-            redis:hdel('user:' .. user_id .. ':' .. chat_id .. ':settings', 'restrict media messages')
-            redis:hdel('user:' .. user_id .. ':' .. chat_id .. ':settings', 'restrict other messages')
-            redis:hdel('user:' .. user_id .. ':' .. chat_id .. ':settings', 'restrict web page previews')
+            self.settings[tostring(chat_id)][tonumber(user_id)]['restrict media messages'] = nil
+            self.settings[tostring(chat_id)][tonumber(user_id)]['restrict other messages'] = nil
+            self.settings[tostring(chat_id)][tonumber(user_id)]['restrict web page previews'] = nil
         end
-        return redis:hdel('user:' .. user_id .. ':' .. chat_id .. ':settings', tostring(setting))
+        self.settings[tostring(chat_id)][tonumber(user_id)][tostring(setting)] = nil
+        return true
     end
     return success
 end
 
-function utils.get_user_setting(chat_id, user_id, setting)
+function utils:get_user_setting(chat_id, user_id, setting)
     if not chat_id or not user_id or not setting then
         return false
-    elseif not redis:hexists('user:' .. user_id .. ':' .. chat_id .. ':settings', tostring(setting)) then
+    end
+    if not self.settings[tostring(chat_id)] then
+        self.settings[tostring(chat_id)] = {}
+    end
+    if not self.settings[tostring(chat_id)][tonumber(user_id)] then
+        self.settings[tostring(chat_id)][tonumber(user_id)] = {}
+    end
+    if not self.settings[tostring(chat_id)][tonumber(user_id)][tostring(setting)] then
         return false
     end
     return true
@@ -342,39 +303,76 @@ function utils.get_chat_id(chat)
     return success.result.id
 end
 
-function utils.get_settings(chat_id)
-    if not chat_id then
-        return false
-    end
-    local file = io.open('data/chats/' .. tostring(chat_id) .. '/settings.json') or io.open('data/users/' .. tostring(chat_id) .. '/settings.json')
+function utils.get_data_file(file_name)
+    local file = io.open('data/' .. file_name)
     if not file then
+        print('Are you sure I have the relevant file permissions to read/write to this location? [data/' .. file_name .. ']')
         return false
     end
-    local settings = file:read('*all')
+    local body = file:read('*all')
     file:close()
-    settings = json.decode(settings)
-    if type(settings) ~= 'table' then
-        return false
+    body = json.decode(body)
+    if type(body) ~= 'table' then
+        return {}
     end
-    return settings
+    return body
 end
 
-function utils.get_setting(chat_id, setting)
-    if not chat_id or not setting then
-        return false
-    end
-    local settings = utils.get_settings(chat_id)
-    if type(settings) ~= 'table' or not settings[setting] then
-        return false
-    end
-    return settings[setting]
+function utils.update_chat(chat)
+    return utils.update_chat_data(chat.id, 'info.json', chat)
 end
 
-function utils.get_value(chat_id, value)
-    if not chat_id or not value then
+function utils.update_user(user)
+    return utils.update_user_data(user.id, 'info.json', user)
+end
+
+function utils:get_setting(chat_id, setting)
+    if not self.settings[tostring(chat_id)] or self.settings[tostring(chat_id)][setting] == nil then
         return false
     end
-    return redis:hget('chat:' .. chat_id .. ':values', tostring(value))
+    return self.settings[tostring(chat_id)][setting]
+end
+
+function utils:get_value(chat_id, key)
+    if not self.values[tostring(chat_id)] then
+        self.values[tostring(chat_id)] = {}
+    end
+    if self.values[tostring(chat_id)][key] == nil then
+        return false
+    end
+    return self.values[tostring(chat_id)][key]
+end
+
+function utils:set_value(chat_id, key, value)
+    if not self.values[tostring(chat_id)] then
+        self.values[tostring(chat_id)] = {}
+    end
+    self.values[tostring(chat_id)][key] = value
+    return true
+end
+
+function utils:update_setting(chat_id, setting, value)
+    if not self.settings[tostring(chat_id)] then
+        self.settings[tostring(chat_id)] = {}
+    end
+    self.settings[tostring(chat_id)][setting] = value
+    return true
+end
+
+function utils:delete_setting(chat_id, setting)
+    if not self.settings[tostring(chat_id)] then
+        self.settings[tostring(chat_id)] = {}
+    end
+    self.settings[tostring(chat_id)][setting] = nil
+    return true
+end
+
+function utils:delete_value(chat_id, key)
+    if not self.values[tostring(chat_id)] then
+        self.values[tostring(chat_id)] = {}
+    end
+    self.values[tostring(chat_id)][key] = nil
+    return true
 end
 
 function utils.log_error(error_message)
@@ -383,14 +381,30 @@ function utils.log_error(error_message)
     print(output)
 end
 
-function utils.update_settings(chat_id, settings)
-    if type(settings) ~= 'table' then
+function utils.update_data_file(file_name, data)
+    if type(data) ~= 'table' then
         return false
     end
-    settings = json.encode(settings, {
+    data = json.encode(data, {
         ['indent'] = true
     })
-    return utils.write_file('data/chats/' .. chat_id .. '/', 'settings.json', settings)
+    return utils.write_file('data/', file_name, data)
+end
+
+function utils:enable_plugin(chat_id, plugin)
+    if not self.disabled_plugins[tostring(chat_id)] then
+        self.disabled_plugins[tostring(chat_id)] = {}
+    end
+    self.disabled_plugins[tostring(chat_id)][plugin] = nil
+    return true
+end
+
+function utils:disable_plugin(chat_id, plugin)
+    if not self.disabled_plugins[tostring(chat_id)] then
+        self.disabled_plugins[tostring(chat_id)] = {}
+    end
+    self.disabled_plugins[tostring(chat_id)][plugin] = true
+    return true
 end
 
 function utils.write_file(file_path, file_name, content)
@@ -481,18 +495,19 @@ function mattata.get_inline_list(username, offset)
     return inline_list
 end
 
-function utils.toggle_setting(chat_id, setting, value)
+function utils:toggle_setting(chat_id, setting, value)
     value = (type(value) ~= 'string' and tostring(value) ~= 'nil') and value or true
-    local settings = utils.get_settings(chat_id)
+    local settings = self.settings[tostring(chat_id)] or {}
     if not chat_id or not setting or type(settings) ~= 'table' then
         return false
     end
-    settings[setting] = settings[setting] == nil and value or nil
-    return utils.update_settings(chat_id, settings)
+    settings[setting] = (settings[setting] == nil) and value or nil
+    self.settings[tostring(chat_id)] = settings
+    return true
 end
 
-function utils.uses_administration(chat_id)
-    return utils.get_setting(message.chat.id, 'use administration')
+function utils:uses_administration(chat_id)
+    return utils.get_setting(self, message.chat.id, 'use administration')
 end
 
 function utils.format_time(seconds)
@@ -526,6 +541,10 @@ function utils.format_time(seconds)
         return weeks ~= 1 and weeks .. ' weeks' or weeks .. ' week'
     end
 end
+
+----------------------
+---- HANDLE LINKS ----
+----------------------
 
 function utils.check_links(message, get_links, only_valid, whitelist)
     local links = {}
@@ -610,6 +629,10 @@ function utils.is_whitelisted_link(link)
     return false
 end
 
+--------------------------
+---- PROCESS STICKERS ----
+--------------------------
+
 function utils.process_stickers(message)
     if message.chat.type == 'supergroup' and message.sticker and message.file_id then
         -- Process each sticker to see if they are one of the configured, command-performing stickers.
@@ -631,6 +654,10 @@ function utils.process_stickers(message)
     end
     return message
 end
+
+-----------------------
+---- GET CHAT INFO ----
+-----------------------
 
 function utils.get_user(input)
     input = tostring(input)
@@ -671,15 +698,24 @@ function utils.load_chat_info(chat_id, search_usernames)
     }
 end
 
-function utils.is_plugin_disabled(plugin, chat_id)
+function utils:is_plugin_disabled(chat_id, plugin)
     chat_id = (type(chat_id) == 'table' and chat_id.chat) and chat_id.chat.id or chat_id
-    return (tostring(redis:hget('chat:' .. chat_id .. ':disabled_plugins', plugin)) == 'true' and plugin ~= 'plugins') and true or false
+    if not self.disabled_plugins[tostring(chat_id)] then
+        return false
+    elseif self.disabled_plugins[tostring(chat_id)][plugin] then
+        return true
+    end
+    return false
 end
 
-function utils.is_group_admin(chat_id, user_id, is_real_admin)
+------------------------------
+---- CHECKING PERMISSIONS ----
+------------------------------
+
+function utils:is_group_admin(chat_id, user_id, is_real_admin)
     if utils.is_global_admin(chat_id) or utils.is_global_admin(user_id) then
         return true
-    elseif not is_real_admin and utils.is_group_mod(chat_id, user_id) then
+    elseif not is_real_admin and utils.is_group_mod(self, chat_id, user_id) then
         return true
     end
     local admins = api.get_chat_administrators(chat_id)
@@ -703,10 +739,11 @@ function utils.is_global_admin(id)
     return false
 end
 
-function utils.is_group_mod(chat_id, user_id)
+function utils:is_group_mod(chat_id, user_id)
     if not chat_id or not user_id then
         return false
-    elseif redis:sismember('administration:' .. chat_id .. ':mods', user_id) then
+    end
+    if self.mods and self.mods[tonumber(user_id)] then
         return true
     end
     return false
@@ -719,19 +756,6 @@ function utils.is_group_owner(chat_id, user_id)
         is_owner = true
     end
     return is_owner
-end
-
-function utils.get_help()
-    local help = {}
-    local count = 1
-    table.sort(mattata.plugin_list)
-    for k, v in pairs(mattata.plugin_list) do
-        if v:match('^/.- %- .-$') then
-            table.insert(help, utf8.char(8226) .. ' ' .. v:match('^(/.-) %- .-$'))
-            count = count + 1
-        end
-    end
-    return help
 end
 
 function utils.is_privacy_enabled(user_id)
@@ -750,7 +774,7 @@ function utils.is_user_blacklisted(message)
         if global and message.chat.type ~= 'private' and not redis:sismember('global_blacklist_unban:' .. message.chat.id, message.from.id) then
         -- If the user is globally blacklisted, and they haven't been banned before for this reason, add them to a set to exclude them from future checks.
             local success = api.ban_chat_member(message.chat.id, message.from.id) -- Attempt to ban the blacklisted user.
-            local output = message.from.first_name .. ' [' .. message.from.username and '@' .. message.from.username or message.from.id .. '] is globally blacklisted.'
+            local output = message.from.first_name .. ' [' .. (message.from.username and '@' .. message.from.username or message.from.id) .. '] is globally blacklisted.'
             output = success and output .. ' For this reason, I have banned them from this group. If you choose to unban them, I will not ban them next time they join!' or ' I tried to ban them, but it seems I don\'t have the required permission to do this. You might like to consider banning them manually, since users on this global blacklist are present because they have flooded or caused other havoc in other groups.'
             api.send_message(message.chat.id, output) -- Alert the group of this user's presence on the global blacklist.
             redis:sadd('global_blacklist_unban:' .. message.chat.id, message.from.id)
@@ -759,6 +783,10 @@ function utils.is_user_blacklisted(message)
     end
     return false
 end
+
+--------------------
+---- STATISTICS ----
+--------------------
 
 function utils.get_message_statistics(self)
     local message = self.message
@@ -796,6 +824,185 @@ function utils.get_message_statistics(self)
         return language['statistics']['1']
     end
     return string.format(language['statistics']['2'], tools.escape_html(message.chat.title), text, tools.comma_value(total))
+end
+
+--------------------
+---- MODERATION ----
+--------------------
+
+function utils.load_chat_data(chat_id, file_name)
+    if not chat_id or not file_name then
+        return false
+    end
+    local file = io.open('data/chats/' .. tostring(chat_id) .. '/' .. tostring(file_name))
+    if not file then
+        return false
+    end
+    local data = file:read('*all')
+    file:close()
+    data = json.decode(data)
+    if type(data) ~= 'table' then
+        return {}
+    end
+    return data
+end
+
+function utils.update_chat_data(chat_id, file_name, data)
+    local file, message, code = io.open('data/chats/' .. tostring(chat_id) .. '/' .. tostring(file_name), 'w+')
+    if tonumber(code) == 2 then
+        os.execute('mkdir -p data/chats/' .. tostring(chat_id) .. '/')
+        file, message, code = io.open('data/chats/' .. tostring(chat_id) .. '/' .. tostring(file_name), 'w+')
+        if code ~= nil then
+            if configuration.debug then
+                print(message, code)
+            end
+            return data
+        end
+    end
+    data = json.encode(data, {
+        ['indent'] = true
+    })
+    local success = file:write(data)
+    file:close()
+    return success, data
+end
+
+function utils.load_user_data(user_id, file_name)
+    if not user_id or not file_name then
+        return false
+    end
+    local file = io.open('data/users/' .. tostring(user_id) .. '/' .. tostring(file_name))
+    if not file then
+        return false
+    end
+    local data = file:read('*all')
+    file:close()
+    data = json.decode(data)
+    if type(data) ~= 'table' then
+        return {}
+    end
+    return data
+end
+
+function utils.update_user_data(user_id, file_name, data)
+    local file, message, code = io.open('data/users/' .. tostring(user_id) .. '/' .. tostring(file_name), 'w+')
+    if tonumber(code) == 2 then
+        os.execute('mkdir -p data/users/' .. tostring(user_id) .. '/')
+        file, message, code = io.open('data/users/' .. tostring(user_id) .. '/' .. tostring(file_name), 'w+')
+        if code ~= nil then
+            if configuration.debug then
+                print(message, code)
+            end
+            return data
+        end
+    end
+    data = json.encode(data, {
+        ['indent'] = true
+    })
+    local success = file:write(data)
+    file:close()
+    return success, data
+end
+
+function utils:get_mods(chat_id)
+    return self.mods[tostring(chat_id)] or {}
+end
+
+function utils:add_mod(chat_id, user_id)
+    self.mods[tostring(chat_id)] = self.mods[tostring(chat_id)] or {}
+    if self.mods[tostring(chat_id)][tonumber(user_id)] then
+        return false, 'This user is already a moderator of this chat!'
+    end
+    self.mods[tostring(chat_id)][tonumber(user_id)] = true
+    return true, 'This user is now a moderator of this chat!'
+end
+
+function utils:remove_mod(chat_id, user_id)
+    self.mods[tostring(chat_id)] = self.mods[tostring(chat_id)] or {}
+    if not self.mods[tostring(chat_id)][tonumber(user_id)] then
+        return false, 'This user was not a moderator of this chat!'
+    end
+    self.mods[tostring(chat_id)][tonumber(user_id)] = nil
+    return true, 'This user is no longer a moderator of this chat!'
+end
+
+function utils:get_custom_commands(chat_id)
+    return self.custom_commands[tostring(chat_id)] or {}
+end
+
+function utils:add_custom_command(chat_id, command, value)
+    self.custom_commands[tostring(chat_id)] = self.custom_commands[tostring(chat_id)] or {}
+    if self.custom_commands[tostring(chat_id)][tostring(command)] then
+        return false, 'This custom command already exists!'
+    end
+    self.custom_commands[tostring(chat_id)][tostring(command)] = tostring(value)
+    return true, 'That text will now be sent whenever that custom command is used!'
+end
+
+function utils:remove_custom_command(chat_id, command)
+    self.custom_commands[tostring(chat_id)] = self.custom_commands[tostring(chat_id)] or {}
+    if not self.custom_commands[tostring(chat_id)][tostring(command)] then
+        return false, 'That custom command does not exist!'
+    end
+    self.custom_commands[tostring(chat_id)][tostring(command)] = nil
+    return true, 'That custom command has been deleted!'
+end
+
+function utils:get_inline_help(input, offset)
+    offset = offset and tonumber(offset) or 0
+    local inline_help = {}
+    local count = offset + 1
+    table.sort(self.plugin_list)
+    for k, v in pairs(self.plugin_list) do
+        if k > offset and k < offset + 50 then -- The bot API only accepts a maximum of 50 results, hence we need the offset.
+            v = v:gsub('\n', ' ')
+            if v:match('^/.- %- .-$') and v:lower():match(input) then
+                local result_type = 'article'
+                local id = tostring(count)
+                local title, description = v:match('^(/.-) %- (.-)$')
+                local output = string.format('%s %s - %s', utf8.char(8226), title, description)
+                local input_message_content = api.input_text_message_content(output)
+                local result = api.inline_result():type(result_type):id(id):title(title):description(description):input_message_content(input_message_content)
+                table.insert(inline_help, result)
+                count = count + 1
+            end
+        end
+    end
+    return inline_help
+end
+
+function utils:get_inline_list(offset)
+    offset = offset and tonumber(offset) or 0
+    local inline_list = {}
+    table.sort(self.inline_plugin_list)
+    for k, v in pairs(self.inline_plugin_list) do
+        if k > offset and k < offset + 50 then -- The bot API only accepts a maximum of 50 results, hence we need the offset.
+            v = v:gsub('\n', ' ')
+            local result_type = 'article'
+            local id = tostring(k)
+            local title, description = v:match('^(/.-) %- (.-)$')
+            local output = tools.symbols.bullet .. ' %s - %s\n\nTo use this command inline, you must use the following syntax:\n@%s %s'
+            local formatted_output = string.format(output, title, description, self.info.username, title)
+            local input_message_content = api.input_text_message_content(output)
+            local reply_markup = api.inline_keyboard():row(api.row():switch_inline_query_button('Show me how!', title))
+            local result = api.inline_result():type(result_type):id(id):title(title):description(description):input_message_content(input_message_content):reply_markup(reply_markup)
+            table.insert(inline_list, result)
+        end
+    end
+    return inline_list
+end
+
+function utils:get_help()
+    local help = {}
+    local count = 1
+    table.sort(self.plugin_list)
+    for k, v in pairs(self.plugin_list) do
+        if v:match('^/.- %- .-$') then
+            table.insert(help, utf8.char(8226) .. ' ' .. v:match('^(/.-) %- .-$'))
+            count = count + 1
+        end
+    end
+    return help
 end
 
 _G.table.contains = function(tab, match)

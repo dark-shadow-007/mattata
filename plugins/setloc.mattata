@@ -4,7 +4,6 @@
 ]]
 
 local setloc = {}
-
 local mattata = require('mattata')
 local http = require('socket.http')
 local url = require('socket.url')
@@ -13,10 +12,8 @@ local redis = dofile('libs/redis.lua')
 local configuration = require('configuration')
 
 function setloc:init()
-    setloc.commands = mattata.commands(
-        self.info.username
-    ):command('setloc').table
-    setloc.help = [[/setloc <location> - Sets your location to the given value.]]
+    setloc.commands = mattata.commands(self.info.username):command('setloc').table
+    setloc.help = '/setloc <location> - Sets your location to the given value.'
 end
 
 function setloc.check_loc(location)
@@ -37,43 +34,19 @@ function setloc.set_loc(user, location)
         return res
     end
     local latitude, longitude, address = res:match('^(.-):(.-):(.-)$')
-    local user_loc = json.encode(
-        {
-            ['latitude'] = latitude,
-            ['longitude'] = longitude,
-            ['address'] = address
-        }
-    )
-    local hash = mattata.get_user_redis_hash(
-        user,
-        'location'
-    )
-    if hash then
-        redis:hset(
-            hash,
-            'location',
-            user_loc
-        )
-        return 'Your location has been updated to: ' .. address .. '\nYou can now use commands such as /weather and /location, without needing to specify a location - your location will be used by default. Giving a different location as the command argument will override this.'
-    end
+    local user_loc = json.encode({
+        ['latitude'] = latitude,
+        ['longitude'] = longitude,
+        ['address'] = address
+    })
+    user = type(user) == 'table' and user.id or user
+    redis:hset('user:' .. user .. ':location', 'location', user_loc)
+    return 'Your location has been updated to: ' .. address .. '\nYou can now use commands such as /weather and /location, without needing to specify a location - your location will be used by default. Giving a different location as the command argument will override this.'
 end
 
 function setloc.get_loc(user)
-    local hash = mattata.get_user_redis_hash(
-        user,
-        'location'
-    )
-    if hash then
-        local location = redis:hget(
-            hash,
-            'location'
-        )
-        if not location or location == 'false' or location == nil then
-            return false
-        else
-            return location
-        end
-    end
+    user = type(user) == 'table' and user.id or user
+    return redis:hget('user:' .. user .. ':location', 'location')
 end
 
 function setloc:on_message(message, configuration)
@@ -81,23 +54,12 @@ function setloc:on_message(message, configuration)
     if not input then
         local location = setloc.get_loc(message.from)
         if not location then
-            return mattata.send_reply(
-                message,
-                'You don\'t have a location set. Use /setloc <location> to set one.'
-            )
+            return mattata.send_reply(message, 'You don\'t have a location set. Use /setloc <location> to set one.')
         end
-        return mattata.send_reply(
-            message,
-            'Your location is currently set to: ' .. json.decode(location).address
-        )
+        return mattata.send_reply(message, 'Your location is currently set to: ' .. json.decode(location).address)
     end
-    return mattata.send_message(
-        message.chat.id,
-        setloc.set_loc(
-            message.from,
-            input
-        )
-    )
+    local output = setloc.set_loc(message.from, input)
+    return mattata.send_message(message.chat.id, output)
 end
 
 return setloc

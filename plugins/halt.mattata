@@ -1,0 +1,21 @@
+--[[
+    Copyright 2017 Matthew Hesketh <wrxck0@gmail.com>
+    This code is licensed under the MIT. See LICENSE for details.
+]]
+
+local halt = {}
+local mattata = require('mattata')
+
+function halt:init()
+    halt.commands = mattata.commands(self.info.username):command('halt'):command('shutdown').table
+end
+
+function halt:on_message(message, configuration, language)
+    if not mattata.is_global_admin(message.from.id) then
+        return false
+    end
+    self.is_started = false
+    return mattata.send_reply(message, 'Shutting down...')
+end
+
+return halt

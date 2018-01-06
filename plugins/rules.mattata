@@ -13,39 +13,16 @@ function rules:init()
 end
 
 function rules:on_message(message, configuration, language)
-    if message.chat.type ~= 'supergroup'
-    then
+    if message.chat.type ~= 'supergroup' then
         return false
     end
-    local output = mattata.get_value(
-        message.chat.id,
-        'rules'
-    )
-    or 'There are no rules set for this chat!'
-    if mattata.get_setting(
-        message.chat.id,
-        'send rules in group'
-    )
-    then
-        return mattata.send_message(
-            message.chat.id,
-            output
-        )
+    local output = mattata.get_value(self, message.chat.id, 'rules') or 'There are no rules set for this chat!'
+    if mattata.get_setting(self, message.chat.id, 'send rules in group') then
+        return mattata.send_message(message.chat.id, output)
     end
-    local success = mattata.send_message(
-        message.from.id,
-        output,
-        'markdown',
-        true,
-        false
-    )
-    return mattata.send_reply(
-        message,
-        success
-        and 'I have sent you the rules via private chat!'
-        or 'You need to speak to me in private chat before I can send you the rules! Just click [here](https://t.me/' .. self.info.username .. '), press the "START" button, and try again!',
-        'markdown'
-    )
+    local success = mattata.send_message(message.from.id, output, 'markdown', true, false)
+    local output = success and 'I have sent you the rules via private chat!' or 'You need to speak to me in private chat before I can send you the rules! Just click [here](https://t.me/' .. self.info.username .. '), press the "START" button, and try again!'
+    return mattata.send_reply(message, output, 'markdown')
 end
 
 return rules

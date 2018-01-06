@@ -234,7 +234,7 @@ function voteban:on_message(message, configuration, language)
             message,
             language['errors']['supergroup']
         )
-    elseif not mattata.is_group_admin(
+    elseif not mattata.is_group_admin(self,
         message.chat.id,
         message.from.id
     )
@@ -321,7 +321,7 @@ function voteban:on_message(message, configuration, language)
             message,
             language['errors']['generic']
         )
-    elseif mattata.is_group_admin(
+    elseif mattata.is_group_admin(self,
         message.chat.id,
         user_object.id
     )

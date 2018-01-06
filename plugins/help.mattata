@@ -66,18 +66,17 @@ end
 
 function help:on_inline_query(inline_query, configuration, language)
     local offset = inline_query.offset and tonumber(inline_query.offset) or 0
-    local output = mattata.get_inline_help(inline_query.query, offset)
-    if #output == 0 and tonumber(offset) == 0 then
+    local output = mattata.get_inline_help(self, inline_query.query, offset)
+    if #output == 0 then
         output = string.format(language['help']['2'], inline_query.query)
         return mattata.send_inline_article(inline_query.id, language['help']['1'], output)
     end
-    offset = tostring(offset + 50)
-    return mattata.answer_inline_query(inline_query.id, output, 0, false, offset)
+    return mattata.answer_inline_query(inline_query.id, output, 0, false, tostring(offset + 50))
 end
 
 function help:on_callback_query(callback_query, message, configuration, language)
     if callback_query.data == 'cmds' then
-        local arguments_list = mattata.get_help()
+        local arguments_list = mattata.get_help(self)
         local plugin_count = #arguments_list
         local page_count = math.floor(tonumber(plugin_count) / 10)
         if math.floor(tonumber(plugin_count) / 10) ~= tonumber(plugin_count) / 10 then
@@ -114,7 +113,7 @@ function help:on_callback_query(callback_query, message, configuration, language
         )
     elseif callback_query.data:match('^results:%d*$') then
         local new_page = callback_query.data:match('^results:(%d*)$')
-        local arguments_list = mattata.get_help()
+        local arguments_list = mattata.get_help(self)
         local plugin_count = #arguments_list
         local page_count = math.floor(tonumber(plugin_count) / 10)
         if math.floor(tonumber(plugin_count) / 10) ~= tonumber(plugin_count) / 10 then
@@ -284,7 +283,7 @@ function help:on_callback_query(callback_query, message, configuration, language
             )
         )
     elseif callback_query.data == 'settings' then
-        if message.chat.type == 'supergroup' and not mattata.is_group_admin(message.chat.id, callback_query.from.id) then
+        if message.chat.type == 'supergroup' and not mattata.is_group_admin(self, message.chat.id, callback_query.from.id) then
             return mattata.answer_callback_query(callback_query.id, language['errors']['admin'])
         end
         return mattata.edit_message_reply_markup(
@@ -293,7 +292,7 @@ function help:on_callback_query(callback_query, message, configuration, language
             nil,
             (
                 message.chat.type == 'supergroup'
-                and mattata.is_group_admin(
+                and mattata.is_group_admin(self,
                     message.chat.id,
                     callback_query.from.id
                 )

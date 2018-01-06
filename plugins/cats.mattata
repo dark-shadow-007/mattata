@@ -10,13 +10,8 @@ local http = require('socket.http')
 local json = require('dkjson')
 
 function cats:init(configuration)
-    assert(
-        configuration.keys.cats,
-        'cats.lua requires an API key, and you haven\'t got one configured!'
-    )
-    cats.commands = mattata.commands(self.info.username)
-    :command('cat')
-    :command('sarah').table -- Sarah likes cats!
+    assert(configuration.keys.cats, 'cats.lua requires an API key, and you haven\'t got one configured!')
+    cats.commands = mattata.commands(self.info.username):command('cat'):command('sarah').table -- Sarah likes cats!
     cats.help = '/cat - Sends a random photo of a cat. Alias: /sarah.'
 end
 
@@ -44,23 +39,27 @@ function cats:on_inline_query(inline_query, configuration, language)
 end
 
 function cats:on_message(message, configuration, language)
+    local photos = {}
     local str, res = http.request('http://thecatapi.com/api/images/get?format=html&type=jpg&api_key=' .. configuration.keys.cats)
-    if res ~= 200
-    then
-        return mattata.send_reply(
-            message,
-            language['errors']['connection']
-        )
+    if res ~= 200 then
+        return mattata.send_reply(message, language.errors.connection)
     end
-    mattata.send_chat_action(
-        message.chat.id,
-        'upload_photo'
-    )
-    return mattata.send_photo(
-        message.chat.id,
-        str:match('%<img src%=%"(.-)%"%>'),
-        language['cats']['1']
-    )
+    table.insert(photos, str:match('%<img src%=%"(.-)%"%>'))
+    for i = 1, math.random(5) do
+        str, res = http.request('http://thecatapi.com/api/images/get?format=html&type=jpg&api_key=' .. configuration.keys.cats)
+        if res == 200 then
+            table.insert(photos, str:match('%<img src%=%"(.-)%"%>'))
+        end
+    end
+    mattata.send_chat_action(message.chat.id, 'upload_photo')
+    if #photos == 1 then
+        mattata.send_photo(message.chat.id, photos[1])
+    end
+    local media_group = mattata.input_media()
+    for _, photo in pairs(photos) do
+        media_group = media_group:photo(photo)
+    end
+    return mattata.send_media_group(message.chat.id, json.encode(media_group))
 end
 
 return cats

@@ -13,7 +13,7 @@ function pin:init()
 end
 
 function pin:on_message(message, configuration, language)
-    if not mattata.is_group_admin(
+    if not mattata.is_group_admin(self,
         message.chat.id,
         message.from.id
     )

@@ -19,7 +19,7 @@ function blacklist:on_message(message, configuration, language)
             message,
             language['errors']['supergroup']
         )
-    elseif not mattata.is_group_admin(
+    elseif not mattata.is_group_admin(self,
         message.chat.id,
         message.from.id
     )
@@ -93,7 +93,7 @@ function blacklist:on_message(message, configuration, language)
             message,
             language['errors']['generic']
         )
-    elseif mattata.is_group_admin(
+    elseif mattata.is_group_admin(self,
         message.chat.id,
         user.id
     )
@@ -127,13 +127,7 @@ function blacklist:on_message(message, configuration, language)
         'blacklists',
         1
     )
-    if redis:hget(
-        string.format(
-            'chat:%s:settings',
-            message.chat.id
-        ),
-        'log administrative actions'
-    ) then
+    if mattata.get_setting(self, message.chat.id, 'log administrative actions') then
         mattata.send_message(
             mattata.get_log_chat(message.chat.id),
             string.format(

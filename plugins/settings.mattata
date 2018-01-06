@@ -4,13 +4,10 @@
 ]]
 
 local settings = {}
-
 local mattata = require('mattata')
 
 function settings:init()
-    settings.commands = mattata.commands(
-        self.info.username
-    ):command('settings').table
+    settings.commands = mattata.commands(self.info.username):command('settings').table
     settings.help = [[/settings - Customise your experience.]]
 end
 

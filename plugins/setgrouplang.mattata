@@ -42,156 +42,77 @@ function setgrouplang.get_keyboard(chat_id, language)
         }
     }
     local total = 0
-    for _, v in pairs(setgrouplang.languages_short)
-    do
+    for _, v in pairs(setgrouplang.languages_short) do
         total = total + 1
     end
     local count = 0
     local rows = math.floor(total / 2)
-    if rows ~= total
-    then
+    if rows ~= total then
         rows = rows + 1
     end
     local row = 1
-    for k, v in pairs(setgrouplang.languages_short)
-    do
+    for k, v in pairs(setgrouplang.languages_short) do
         count = count + 1
-        if count == rows * row
-        then
+        if count == rows * row then
             row = row + 1
-            table.insert(
-                keyboard.inline_keyboard,
-                {}
-            )
+            table.insert(keyboard.inline_keyboard, {})
         end
-        table.insert(
-            keyboard.inline_keyboard[row],
-            {
-                ['text'] = v,
-                ['callback_data'] = 'setgrouplang:' .. chat_id .. ':' .. k
-            }
-        )
+        table.insert(keyboard.inline_keyboard[row], {
+            ['text'] = v,
+            ['callback_data'] = 'setgrouplang:' .. chat_id .. ':' .. k
+        })
     end
-    table.insert(
-        keyboard.inline_keyboard,
+    table.insert(keyboard.inline_keyboard, {
         {
-            {
-                ['text'] = language['setgrouplang']['5'],
-                ['callback_data'] = 'administration:' .. chat_id .. ':force_group_language'
-            }
+            ['text'] = language['setgrouplang']['5'],
+            ['callback_data'] = 'administration:' .. chat_id .. ':force_group_language'
         }
-    )
+    })
     return keyboard
 end
 
-function setgrouplang.set_lang(chat_id, locale, lang, language)
-    redis:hset(
-        'chat:' .. chat_id .. ':values',
-        'group language',
-        locale
-    )
-    return string.format(
-        language['setgrouplang']['1'],
-        lang
-    )
+function setgrouplang:set_lang(chat_id, locale, lang, language)
+    mattata.set_value(self, chat_id, 'group language', locale)
+    return string.format(language['setgrouplang']['1'], lang)
 end
 
-function setgrouplang.get_lang(chat_id, language)
-    local lang = mattata.get_value(
-        chat_id,
-        'group language'
-    )
+function setgrouplang:get_lang(chat_id, language)
+    local lang = mattata.get_value(self, chat_id, 'group language')
     or 'en_gb'
-    for k, v in pairs(setgrouplang.languages)
-    do
-        if k == lang
-        then
+    for k, v in pairs(setgrouplang.languages) do
+        if k == lang then
             lang = v
             break
         end
     end
-    return string.format(
-        language['setgrouplang']['2'],
-        lang
-    )
+    return string.format(language['setgrouplang']['2'], lang)
 end
 
 function setgrouplang:on_callback_query(callback_query, message, configuration, language)
-    if not message
-    or (
-        message
-        and message.date <= 1493668000
-    )
-    then
+    if not message or (message and message.date <= 1493668000) then
         return -- We don't want to process requests from messages before the language
         -- functionality was re-implemented, it could cause issues!
-    elseif not mattata.is_group_admin(
-        message.chat.id,
-        callback_query.from.id
-    )
-    then
-        return mattata.answer_callback_query(
-            callback_query.id,
-            language['errors']['admin']
-        )
+    elseif not mattata.is_group_admin(self, message.chat.id, callback_query.from.id) then
+        return mattata.answer_callback_query(callback_query.id, language['errors']['admin'])
     end
     local chat_id, new_language = callback_query.data:match('^(.-)%:(.-)$')
-    if not chat_id
-    or not new_language
-    or tostring(message.chat.id) ~= chat_id
-    then
+    if not chat_id or not new_language or tostring(message.chat.id) ~= chat_id then
         return
-    elseif not mattata.get_setting(
-        message.chat.id,
-        'force group language'
-    )
-    then
-        redis:hset(
-            'chat:' .. message.chat.id .. ':settings',
-            'force group language',
-            true
-        )
+    elseif not mattata.get_setting(self, message.chat.id, 'force group language') then
+        mattata.update_setting(self, message.chat.id, 'force group language', true)
     end
-    return mattata.edit_message_text(
-        message.chat.id,
-        message.message_id,
-        setgrouplang.set_lang(
-            chat_id,
-            new_language,
-            setgrouplang.languages[new_language],
-            language
-        ),
-        nil,
-        true,
-        setgrouplang.get_keyboard(
-            chat_id,
-            language
-        )
-    )
+    local output = setgrouplang.set_lang(self, chat_id, new_language, setgrouplang.languages[new_language], language)
+    local keyboard = setgrouplang.get_keyboard(chat_id, language)
+    return mattata.edit_message_text(message.chat.id, message.message_id, output, nil, true, keyboard)
 end
 
 function setgrouplang:on_message(message, configuration, language)
-    if not mattata.is_group_admin(
-        message.chat.id,
-        message.from.id
-    )
-    then
-        return mattata.send_reply(
-            message,
-            language['errors']['admin']
-        )
-    elseif message.chat.type ~= 'supergroup'
-    then
-        return mattata.send_reply(
-            message,
-            language['errors']['supergroup']
-        )
+    if not mattata.is_group_admin(self, message.chat.id, message.from.id) then
+        return mattata.send_reply(message, language['errors']['admin'])
+    elseif message.chat.type ~= 'supergroup' then
+        return mattata.send_reply(message, language['errors']['supergroup'])
     end
-    if not mattata.get_setting(
-        message.chat.id,
-        'force group language'
-    )
-    then
+    if not mattata.get_setting(self, message.chat.id, 'force group language') then
         return mattata.send_message(
             message.chat.id,
             language['setgrouplang']['3'],
@@ -207,21 +128,9 @@ function setgrouplang:on_message(message, configuration, language)
             )
         )
     end
-    return mattata.send_message(
-        message.chat.id,
-        setgrouplang.get_lang(
-            message.chat.id,
-            language
-        ),
-        nil,
-        true,
-        false,
-        nil,
-        setgrouplang.get_keyboard(
-            message.chat.id,
-            language
-        )
-    )
+    local output = setgrouplang.get_lang(self, message.chat.id, language)
+    local keyboard = setgrouplang.get_keyboard(message.chat.id, language)
+    return mattata.send_message(message.chat.id, output, nil, true, false, nil, keyboard)
 end
 
 return setgrouplang

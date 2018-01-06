@@ -23,7 +23,7 @@ function channel:on_callback_query(callback_query, message, configuration, langu
     request = json.decode(request)
     if request.from ~= callback_query.from.id then
         return mattata.answer_callback_query(callback_query.id, language['channel']['1'])
-    elseif not mattata.is_group_admin(request.target, request.from) then
+    elseif not mattata.is_group_admin(self, request.target, request.from) then
         return mattata.answer_callback_query(callback_query.id, language['channel']['2'])
     end
     local success = mattata.send_message(request.target, request.text, 'markdown')

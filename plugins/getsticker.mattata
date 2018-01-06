@@ -1,0 +1,33 @@
+--[[
+    Copyright 2017 Matthew Hesketh <wrxck0@gmail.com>
+    This code is licensed under the MIT. See LICENSE for details.
+]]
+
+local getsticker = {}
+local mattata = require('mattata')
+
+function getsticker:init()
+    getsticker.commands = mattata.commands(self.info.username):command('getsticker').table
+    getsticker.help = '/getsticker - Downloads the replied-to sticker and sends it back as a PNG, ready to be added to a sticker pack!'
+end
+
+function getsticker:on_message(message, configuration, language)
+    if not message.reply then
+        return mattata.send_reply(message, 'Please reply to the sticker you\'d like to convert to PNG.')
+    elseif not message.reply.sticker then
+        return mattata.send_reply(message, 'The replied-to message must be a sticker for this to work!')
+    end
+    local sticker = message.reply.sticker
+    local file = mattata.get_file(sticker.file_id)
+    if not file or not file.result then
+        return mattata.send_reply(message, 'An error occured whilst downloading that file from Telegram\'s server. Please re-upload it, and try again.')
+    end
+    local path = 'https://api.telegram.org/file/bot' .. configuration.bot_token .. '/' .. file.result.file_path
+    os.execute('wget --quiet --timeout=1 --directory-prefix=stickers --no-clobber ' .. path)
+    os.execute('dwebp ' .. file.result.file_path .. ' -o stickers/sticker.png')
+    local success = mattata.send_document(message.chat.id, 'stickers/sticker.png')
+    os.execute('rm stickers/sticker.png')
+    return success
+end
+
+return getsticker
