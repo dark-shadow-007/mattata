@@ -45,7 +45,7 @@ function name:on_message(message, configuration, language)
         )
     end
     if message.chat.type ~= 'private'
-    and not mattata.is_group_admin(
+    and not mattata.is_group_admin(self,
         message.chat.id,
         message.from.id
     )
